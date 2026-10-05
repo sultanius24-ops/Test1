@@ -152,6 +152,13 @@ input[readonly].auto { background: #f3f5f8; color: var(--navy); font-family: ui-
 .data-table .col-act { width: 70px; white-space: nowrap; padding-top: 8px; }
 .data-table .col-act .icon-btn + .icon-btn { margin-left: 4px; }
 .data-table tr.empty td { text-align: center; color: var(--muted); padding: 14px; }
+.repeater-list { display: grid; gap: 14px; }
+.repeater-item { border: 1px solid var(--border); border-left: 4px solid var(--teal); border-radius: 8px; padding: 12px 16px 16px; background: #fbfcfd; }
+.repeater-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.repeater-title { margin: 0; font-size: 15px; color: var(--navy); }
+.repeater-actions { display: flex; gap: 4px; }
+.empty-note { color: var(--muted); font-style: italic; margin: 4px 0; }
+.type-repeater > div > .btn-small { margin-top: 10px; }
 .sig-placeholder { display: block; color: var(--muted); font-size: 12px; font-style: italic; padding: 8px 4px; }
 .type-table .btn-small { margin-top: 8px; }
 

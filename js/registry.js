@@ -23,7 +23,8 @@ window.UTAS = window.UTAS || {};
   }
 
   function normField(f) {
-    const out = Object.assign({}, f, { label: bi(f.label), hint: bi(f.hint) });
+    const out = Object.assign({}, f, { label: bi(f.label), hint: bi(f.hint), itemLabel: bi(f.itemLabel) });
+    if (f.fields) out.fields = f.fields.map(normField);
     if (f.options) out.options = f.options.map(opt);
     if (f.columns) {
       out.columns = f.columns.map(c => Object.assign({}, c, {

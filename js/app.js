@@ -34,7 +34,7 @@
     const v = { doc_date: L.today(), version: '1.0' };
     for (const f of allFields(tpl)) {
       if (f.type === 'auto' && f.auto === 'uuid') v[f.id] = L.uuid();
-      if (f.type === 'table' && f.defaultRows) v[f.id] = clone(f.defaultRows);
+      if ((f.type === 'table' || f.type === 'repeater') && f.defaultRows) v[f.id] = clone(f.defaultRows);
       if (f.default != null) v[f.id] = clone(f.default);
     }
     return v;
@@ -54,6 +54,19 @@
         values[f.id] = fromDoc.values[f.id];
       }
     }
+  }
+
+  // Fill empty document-link fields with the newest saved document of the same system code.
+  function linkSavedDocs(tpl, values, docs) {
+    const code = String(values.system_code || '').toUpperCase();
+    if (!code) return 0;
+    let n = 0;
+    for (const f of allFields(tpl)) {
+      if (f.type !== 'docref' || f.id === 'prev_ref' || values[f.id]) continue;
+      const d = docs.find(x => x.templateId === f.templateId && String(x.values.system_code || '').toUpperCase() === code);
+      if (d) { values[f.id] = d.ref; n++; }
+    }
+    return n;
   }
 
   async function uniqueRef(tpl, values, selfId) {
@@ -95,6 +108,7 @@
           const from = await UTAS.store.get(params.get('from'));
           if (from) carryForward(from, tpl, values);
         }
+        if (tpl.autoLinkDocs) linkSavedDocs(tpl, values, await UTAS.store.all());
         await renderEditor(tpl, { id: null, templateId: tpl.id, values });
       } else if (parts[0] === 'doc' && parts[1]) {
         const doc = await UTAS.store.get(parts[1]);
@@ -255,17 +269,27 @@
     const saveBtn = h('button', { type: 'button', class: 'btn' }, 'Save draft');
     const saveDlBtn = h('button', { type: 'button', class: 'btn btn-primary' }, 'Save & Download Word');
     const next = UTAS.nextTemplates(tpl.id);
+    const linkBtn = tpl.autoLinkDocs ? h('button', { type: 'button', class: 'btn', title: 'Fill empty phase references from saved documents with the same System Code' }, 'Link saved documents') : null;
     const nextBox = h('div', { class: 'next-box', hidden: isNew });
 
     const drawNext = () => {
       nextBox.innerHTML = '';
-      if (!doc.id || !next.length) { nextBox.hidden = true; return; }
+      if (!doc.id) { nextBox.hidden = true; return; }
       nextBox.hidden = false;
       nextBox.appendChild(h('span', {}, 'Next step / الخطوة التالية: '));
       for (const t of next) {
         nextBox.appendChild(h('a', { class: 'btn btn-small btn-primary', href: `#/new/${t.id}?from=${doc.id}` },
           `Create ${t.title.en} →`));
       }
+      // Shortcut to the system's lifecycle document (open the existing one or start it).
+      for (const t of UTAS.templates.filter(x => x.autoLinkDocs && x.id !== tpl.id)) {
+        const code = String(values.system_code || '').toUpperCase();
+        const existing = savedDocs.find(d => d.templateId === t.id && code && String(d.values.system_code || '').toUpperCase() === code);
+        nextBox.appendChild(existing
+          ? h('a', { class: 'btn btn-small', href: '#/doc/' + existing.id }, `Open ${t.title.en}`)
+          : h('a', { class: 'btn btn-small', href: `#/new/${t.id}?from=${doc.id}` }, `Start ${t.title.en}`));
+      }
+      if (!nextBox.querySelector('a')) nextBox.hidden = true;
     };
 
     const toolbar = h('div', { class: 'editor-bar' },
@@ -274,7 +298,7 @@
         h('h1', {}, h('span', { class: 'badge' }, tpl.fileType), ' ', h('span', { class: 'en' }, tpl.title.en),
           h('span', { class: 'ar', lang: 'ar', dir: 'rtl' }, tpl.title.ar)),
         h('div', { class: 'bar-meta' }, refOut, status)),
-      h('div', { class: 'bar-actions' }, saveBtn, saveDlBtn));
+      h('div', { class: 'bar-actions' }, linkBtn, saveBtn, saveDlBtn));
 
     const toc = h('nav', { class: 'toc', 'aria-label': 'Sections' });
     const formRoot = h('form', { class: 'doc-form', novalidate: true, onsubmit: e => e.preventDefault() });
@@ -350,6 +374,16 @@
         [saveBtn, saveDlBtn].forEach(b => { b.disabled = false; });
       }
     }
+
+    if (linkBtn) linkBtn.addEventListener('click', async () => {
+      if (!values.system_code) { UTAS.toast('Enter the System Code first.', 'error'); return; }
+      const n = linkSavedDocs(tpl, values, (await UTAS.store.all()).filter(d => d.id !== doc.id));
+      if (n) {
+        form.render();
+        form.changed();
+      }
+      UTAS.toast(n ? `Linked ${n} document(s).` : 'No new matching documents found for ' + values.system_code + '.');
+    });
 
     saveBtn.addEventListener('click', () => save(false));
     saveDlBtn.addEventListener('click', () => save(true));

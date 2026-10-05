@@ -16,6 +16,12 @@ Fill in a form → click **Save & Download Word** → you get a formatted, bilin
 | 3 | Project Plan (with auto-generated Gantt chart) | `PP` | Proposal |
 | 4 | Software Requirements Specification | `SRS` | Project Plan |
 | 5 | Digital Accessibility | `DA` | SRS |
+| 6 | System Implementation File | `IMP` | Digital Accessibility |
+| 7 | System Testing | `TST` | Implementation |
+| 8 | Systems Deployment File | `DEP` | Testing |
+| 9 | User Manual (function blocks with screenshots) | `UM` | Deployment |
+| 10 | Systems Improvement Plan | `SIP` | User Manual |
+| 11 | System Lifecycle (one link per phase) | `SLC` | all of the above |
 
 ## Features
 
@@ -27,6 +33,9 @@ Fill in a form → click **Save & Download Word** → you get a formatted, bilin
 - **Conditional sections**: e.g. the SRF shows Form A, B or C depending on the request type.
 - **Validation** of required fields, email and phone before downloading.
   **Save draft** saves without checking.
+- **System Lifecycle**: each phase links to its saved document. Links are filled in
+  automatically from saved documents with the same System Code (or click
+  **Link saved documents**). Every saved document has an Open/Start Lifecycle shortcut.
 - **Tables** with add/remove rows (WBS, risks, requirements, signatures, …).
 - **Attachments**: images (PNG/JPG/GIF) are embedded in the Word file with captions;
   other files are listed by name.
@@ -107,14 +116,18 @@ system name, system code, previous reference) is added to every template automat
 | `checkboxes` | Several choices | `options`, `allowOther` |
 | `checkbox` | Single yes/no tick | — |
 | `table` | Repeating rows | `columns: [{ id, label, type, width, options }]`, `defaultRows`, `gantt` |
+| `repeater` | Repeating blocks of sub-fields (e.g. one per function) | `fields: [...]`, `itemLabel`, `titleField`, `defaultRows` |
 | `files` | Attachments (images embedded in Word) | `accept` |
 | `auto` | Read-only generated value | `auto: 'uuid'` |
+| `docref` | Link to a saved document of another type | `templateId` |
 
 Common options for any field: `required: true`, `hint: [en, ar]`,
 `showIf: { field: 'other_field_id', is: 'value' }` (also works on sections; `is` can be an array).
 
 Column types inside a `table`: `text` (default), `textarea`, `number`, `date`, `select`,
-`signature` (left blank for a handwritten signature).
+`password` (masked while not being edited), `signature` (left blank for a handwritten signature).
+
+Templates with `autoLinkDocs: true` get the **Link saved documents** button.
 
 ## Project structure
 

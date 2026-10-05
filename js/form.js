@@ -67,6 +67,10 @@ window.UTAS = window.UTAS || {};
       this.render();
     }
 
+    fid(f) {
+      return 'f_' + (this.opts.idPrefix || '') + f.id;
+    }
+
     changed() {
       this.refresh();
       if (this.opts.onChange) this.opts.onChange(this.values);
@@ -79,6 +83,8 @@ window.UTAS = window.UTAS || {};
     }
 
     render() {
+      this.subForms = {};
+      if (this.opts.nested) return this.renderNested();
       const scroll = window.scrollY;
       this.root.innerHTML = '';
       this.summary = h('div', { class: 'error-summary', role: 'alert', tabindex: '-1', hidden: true });
@@ -105,6 +111,23 @@ window.UTAS = window.UTAS || {};
       window.scrollTo(0, scroll);
     }
 
+    // Fields only (used for the items of a repeater field).
+    renderNested() {
+      this.root.innerHTML = '';
+      this.summary = h('div', { hidden: true });
+      this.fieldEls = [];
+      const s = this.tpl.sections[0];
+      const grid = h('div', { class: 'field-grid' });
+      for (const f of s.fields) {
+        const el = this.renderField(f);
+        this.fieldEls.push({ f, el });
+        grid.appendChild(el);
+      }
+      this.root.appendChild(grid);
+      this.sectionEls = [{ s, el: grid, num: h('span') }];
+      this.refresh();
+    }
+
     refresh() {
       let n = 0;
       for (const { s, el, num } of this.sectionEls) {
@@ -128,7 +151,7 @@ window.UTAS = window.UTAS || {};
     }
 
     fieldShell(f, control, isGroup) {
-      const fid = 'f_' + f.id;
+      const fid = this.fid(f);
       const req = f.required ? h('span', { class: 'req', title: 'Required / إلزامي' }, '*') : null;
       const hintId = f.hint ? fid + '_hint' : null;
       const errId = fid + '_err';
@@ -149,7 +172,7 @@ window.UTAS = window.UTAS || {};
     }
 
     renderField(f) {
-      const fid = 'f_' + f.id;
+      const fid = this.fid(f);
       const v = this.values;
       switch (f.type) {
         case 'auto': {
@@ -223,6 +246,7 @@ window.UTAS = window.UTAS || {};
         }
         case 'docref': return this.renderDocRef(f);
         case 'table': return this.renderTable(f);
+        case 'repeater': return this.renderRepeater(f);
         case 'files': return this.renderFiles(f);
         default:
           return h('div', { class: 'field' }, 'Unknown field type: ' + f.type);
@@ -239,7 +263,7 @@ window.UTAS = window.UTAS || {};
     }
 
     renderDocRef(f) {
-      const fid = 'f_' + f.id;
+      const fid = this.fid(f);
       const docs = (this.opts.savedDocs || []).filter(d => d.templateId === f.templateId);
       const prevTpl = UTAS.getTemplate(f.templateId);
       const current = this.values[f.id] || '';
@@ -304,6 +328,12 @@ window.UTAS = window.UTAS || {};
                 ...c.options.map(o => h('option', { value: o.value }, L.optionText(o))));
               ctl.value = row[c.id] || '';
               ctl.addEventListener('change', () => { row[c.id] = ctl.value; this.clearError(f.id); this.changed(); });
+            } else if (c.type === 'password') {
+              // Masked unless the cell is being edited.
+              ctl = h('input', { type: 'password', autocomplete: 'new-password', 'aria-label': aria, value: row[c.id] || '' });
+              ctl.addEventListener('focus', () => { ctl.type = 'text'; });
+              ctl.addEventListener('blur', () => { ctl.type = 'password'; });
+              ctl.addEventListener('input', () => { row[c.id] = ctl.value; this.clearError(f.id); this.changed(); });
             } else if (c.type === 'textarea') {
               ctl = h('textarea', { rows: 2, dir: 'auto', 'aria-label': aria });
               ctl.value = row[c.id] || '';
@@ -339,8 +369,56 @@ window.UTAS = window.UTAS || {};
       return this.fieldShell(f, h('div', {}, h('div', { class: 'table-wrap' }, table), add), true);
     }
 
+    // Repeating blocks of sub-fields, e.g. one block per function with steps and screenshots.
+    renderRepeater(f) {
+      if (!Array.isArray(this.values[f.id])) this.values[f.id] = [];
+      const items = this.values[f.id];
+      const list = h('div', { class: 'repeater-list' });
+      const subTpl = Object.assign({}, this.tpl, { sections: [{ id: f.id, fields: f.fields }] });
+      const itemName = f.itemLabel || { en: 'Item', ar: 'عنصر' };
+      const titleOf = (item, i) => `${itemName.en} ${i + 1}` + (f.titleField && item[f.titleField] ? ': ' + item[f.titleField] : '');
+
+      const draw = () => {
+        list.innerHTML = '';
+        this.subForms[f.id] = [];
+        items.forEach((item, i) => {
+          const title = h('h3', { class: 'repeater-title' }, titleOf(item, i));
+          const body = h('div', { class: 'repeater-body' });
+          const up = h('button', { type: 'button', class: 'icon-btn', 'aria-label': `Move ${titleOf(item, i)} up`, disabled: i === 0,
+            onclick: () => { items.splice(i - 1, 0, items.splice(i, 1)[0]); draw(); this.changed(); } }, '↑');
+          const del = h('button', { type: 'button', class: 'icon-btn danger', 'aria-label': `Remove ${titleOf(item, i)}`,
+            onclick: () => {
+              if (!confirm(`Remove “${titleOf(item, i)}”?`)) return;
+              items.splice(i, 1); draw(); this.changed();
+            } }, '✕');
+          list.appendChild(h('div', { class: 'repeater-item' },
+            h('div', { class: 'repeater-head' }, title, h('div', { class: 'repeater-actions' }, up, del)), body));
+          const sub = new Form(subTpl, item, body, {
+            nested: true,
+            idPrefix: `${this.opts.idPrefix || ''}${f.id}_${i}_`,
+            savedDocs: this.opts.savedDocs,
+            onChange: () => { title.textContent = titleOf(item, i); this.clearError(f.id); this.changed(); }
+          });
+          this.subForms[f.id].push(sub);
+        });
+        if (!items.length) list.appendChild(h('p', { class: 'empty-note' }, 'Nothing added yet — click the button below.'));
+      };
+      draw();
+
+      const add = h('button', { type: 'button', class: 'btn btn-small', onclick: () => {
+        items.push({});
+        draw();
+        this.changed();
+        const cards = list.querySelectorAll('.repeater-item');
+        const first = cards[cards.length - 1].querySelector('input, textarea, select');
+        if (first) first.focus();
+      } }, `+ Add ${itemName.en.toLowerCase()} / إضافة ${itemName.ar || ''}`);
+
+      return this.fieldShell(f, h('div', {}, list, add), true);
+    }
+
     renderFiles(f) {
-      const fid = 'f_' + f.id;
+      const fid = this.fid(f);
       if (!Array.isArray(this.values[f.id])) this.values[f.id] = [];
       const files = this.values[f.id];
       const list = h('ul', { class: 'file-list' });
@@ -411,6 +489,10 @@ window.UTAS = window.UTAS || {};
             if (f.type === 'number' && (isNaN(Number(v)) || (f.min != null && Number(v) < f.min))) msg = 'Enter a valid number. / أدخل رقماً صحيحاً';
             if (f.maxLength && String(v).length > f.maxLength) msg = `Maximum ${f.maxLength} characters.`;
           }
+          if (!msg && f.type === 'repeater') {
+            const bad = (this.subForms[f.id] || []).filter(sf => !sf.validate()).length;
+            if (bad) msg = 'Complete the required fields inside each item. / أكمل الحقول الإلزامية في كل عنصر';
+          }
           if (!msg && f.allowOther) {
             const on = Array.isArray(v) ? v.includes('other') : v === 'other';
             if (on && !String(this.values[f.id + '_other'] || '').trim()) msg = 'Please specify “Other”. / يرجى تحديد "أخرى"';
@@ -424,7 +506,11 @@ window.UTAS = window.UTAS || {};
 
     showErrors(errors) {
       for (const { f } of this.fieldEls) this.clearError(f.id);
-      if (!errors.length) { this.summary.hidden = true; return; }
+      if (!errors.length) {
+        Object.values(this.subForms || {}).flat().forEach(sf => sf.showErrors([]));
+        this.summary.hidden = true;
+        return;
+      }
       for (const { f, msg } of errors) {
         const entry = this.fieldEls.find(x => x.f === f);
         entry.el.classList.add('has-error');
@@ -432,6 +518,7 @@ window.UTAS = window.UTAS || {};
         err.textContent = msg;
         err.hidden = false;
       }
+      if (this.opts.nested) return;
       this.summary.innerHTML = '';
       this.summary.appendChild(h('h2', {}, `Please fix ${errors.length} field${errors.length > 1 ? 's' : ''} / يرجى تصحيح الحقول التالية`));
       this.summary.appendChild(h('ul', {}, ...errors.map(({ f }) =>

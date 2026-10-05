@@ -361,9 +361,34 @@ window.UTAS = window.UTAS || {};
         if (f.gantt) out.push(...ganttTable(f, values), spacer(80));
       } else if (f.type === 'files') {
         out.push(fieldLabel(f), ...filesBlock(f, values, counter), spacer(60));
+      } else if (f.type === 'repeater') {
+        out.push(...repeaterBlock(tpl, f, values, counter));
       }
     }
     flush();
+    return out;
+  }
+
+  // One sub-heading per item, followed by the item's own fields.
+  function repeaterBlock(tpl, f, values, counter) {
+    const items = Array.isArray(values[f.id]) ? values[f.id] : [];
+    if (!items.length) return [fieldLabel(f), dash(), spacer(80)];
+    const name = f.itemLabel || { en: 'Item', ar: 'عنصر' };
+    const out = [];
+    items.forEach((item, i) => {
+      const title = f.titleField && item[f.titleField] ? item[f.titleField] : '';
+      out.push(new Paragraph({
+        keepNext: true,
+        spacing: { before: 220, after: 100 },
+        children: [
+          run(`${name.en} ${i + 1}`, { bold: true, color: TEAL, size: 23, rightToLeft: false }),
+          title ? run(': ', { bold: true, color: TEAL, size: 23, rightToLeft: false }) : null,
+          title ? run(title, { bold: true, color: NAVY, size: 23 }) : null
+        ].filter(Boolean)
+      }));
+      const fields = f.fields.filter(x => x.id !== f.titleField);
+      out.push(...sectionContent(tpl, { fields }, item, counter));
+    });
     return out;
   }
 
