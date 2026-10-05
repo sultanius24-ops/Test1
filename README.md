@@ -42,19 +42,56 @@ Fill in a form → click **Save & Download Word** → you get a formatted, bilin
 - **Saved documents list** with search, re-download, duplicate and delete.
 - **Backup**: export/import all documents as JSON (to move them to another computer).
 
-Documents are stored **in the browser** (IndexedDB). There is no server or database.
+## Two ways to run it
 
-## How to run
+The same pages work in both modes. The app detects which one it is in.
 
-No installation and no build step.
+| | **Team server** (recommended) | **Offline / single user** |
+|---|---|---|
+| Where documents are saved | Shared SQLite database on the server | This browser only |
+| Sign-in | Microsoft 365 (university account) | None |
+| Who sees documents | Every approved team member | Only you |
+| Extras | Who saved what, change history, edit-conflict protection, admin page, server backups | — |
+| How to start | See below | Double-click `index.html` |
 
-- **Easiest:** double-click `index.html` (Chrome, Edge or Firefox).
-- **Or serve the folder** (recommended when shared on a network):
-  ```bash
-  python3 -m http.server 8080
-  # open http://localhost:8080
-  ```
-  Any static web server works (IIS, Apache, Nginx, GitHub Pages).
+### Team server
+
+**Production (Windows Server / IIS):** follow **[docs/DEPLOY-IIS.md](docs/DEPLOY-IIS.md)**.
+
+**Try it on your computer** (needs Node.js 22.13+):
+
+```bash
+npm install
+cp .env.example .env
+# In .env set:  AUTH_MODE=dev   NODE_ENV=development   BASE_URL=http://localhost:3000
+#               SESSION_SECRET=<any 32+ characters>
+npm start
+# open http://localhost:3000
+```
+
+`AUTH_MODE=dev` shows a simple name/email form instead of Microsoft sign-in. It is for testing
+only, and the server refuses to start in this mode when `NODE_ENV=production`.
+
+How the team server works:
+
+- **Roles:**
+  - The first sign-in (or anyone in `ADMIN_EMAILS`) becomes **Admin**.
+  - Everyone else starts as *waiting for approval* until an admin makes them a **Member**.
+  - Members can view, create and edit all documents. Admins can also delete documents, manage users and export everything.
+- **Edit conflicts:** if two people edit the same document, the second save is stopped and that
+  person is shown who saved first, so no one silently overwrites someone else.
+- **History:** every create, save and delete is logged. See **History** in the editor, or
+  **Admin → Activity log**.
+- **Deleting** hides the document but keeps it in the database and in backups.
+- **Moving offline documents to the server:** use **Export backup** in the offline version, then
+  **Import backup** on the server.
+
+Server tests: `npm test`.
+
+### Offline / single user
+
+No installation. Double-click `index.html` (Chrome, Edge or Firefox). Documents stay in that
+browser. Use **Export backup (JSON)** to keep a copy.
 
 ## Customising
 
@@ -139,7 +176,16 @@ js/registry.js             template registry + shared logic (reference number, v
 js/templates/*.js          one file per document type
 js/form.js                 form renderer + validation
 js/docx-export.js          Word (.docx) generator
-js/storage.js              browser storage (IndexedDB)
+js/storage.js              storage: server API or browser (IndexedDB)
 js/app.js                  pages, routing, save & download
 vendor/docx.iife.js        docx library v9.7.1 (MIT) — https://github.com/dolanmiu/docx
+server/server.js           web server + JSON API
+server/auth.js             Microsoft 365 sign-in (and dev sign-in for testing)
+server/db.js               SQLite database (users, documents, activity log)
+server/config.js           settings from .env
+server/backup.js           npm run backup
+server/test/               automated tests (npm test)
+deploy/iis/web.config      IIS reverse-proxy configuration
+docs/DEPLOY-IIS.md         step-by-step Windows Server deployment
+.env.example               all server settings, documented
 ```
