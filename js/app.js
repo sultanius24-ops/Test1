@@ -13,6 +13,11 @@
 
   let dirty = false;
   let ignoreNextHash = false;
+  let scrollSpy = null; // highlights the current section in the editor's side navigation
+
+  window.addEventListener('scroll', () => {
+    if (scrollSpy) requestAnimationFrame(() => scrollSpy && scrollSpy());
+  }, { passive: true });
 
   /* ---------- helpers ---------- */
   UTAS.toast = function (msg, type) {
@@ -146,27 +151,44 @@
 
   /* ---------- home ---------- */
   async function renderHome() {
+    scrollSpy = null;
     document.title = 'UTAS Documentation System';
     const docs = await UTAS.store.all();
     app.innerHTML = '';
 
-    app.appendChild(h('section', { class: 'hero' },
-      h('h1', {}, ...biText({ en: 'Systems Documentation', ar: 'نظام توثيق الأنظمة' })),
-      h('p', {}, 'Fill in a form, save it, and download it as a Word (.docx) file. Documents are linked in order — each one references the previous document.'),
-      h('p', { class: 'ar', lang: 'ar', dir: 'rtl' }, 'املأ النموذج واحفظه ثم قم بتنزيله كملف Word. المستندات مترابطة بالتسلسل، وكل مستند يشير إلى المستند السابق.')));
+    const systems = new Set(docs.map(d => String(d.values.system_code || '').toUpperCase()).filter(Boolean));
+    const stat = (en, ar, value, cls) => h('div', { class: 'stat' },
+      h('dt', {}, h('span', {}, en), h('span', { class: 'ar', lang: 'ar', dir: 'rtl' }, ar)),
+      h('dd', { class: cls || null }, value));
 
-    const cards = h('ol', { class: 'tpl-grid' }, ...UTAS.templates.map((t, i) => h('li', { class: 'tpl-card' },
-      h('div', { class: 'tpl-step', 'aria-hidden': 'true' }, String(i + 1)),
-      h('div', { class: 'tpl-body' },
-        h('h3', {}, h('span', { class: 'en' }, t.title.en), h('span', { class: 'ar', lang: 'ar', dir: 'rtl' }, t.title.ar)),
-        h('p', {}, t.description ? t.description.en : ''),
-        h('div', { class: 'tpl-meta' },
-          h('span', { class: 'badge' }, t.fileType),
-          h('span', { class: 'count' }, `${docs.filter(d => d.templateId === t.id).length} saved`))),
-      h('a', { class: 'btn btn-primary', href: '#/new/' + t.id, 'aria-label': 'New ' + t.title.en }, '+ New'))));
+    app.appendChild(h('section', { class: 'hero' },
+      h('div', { class: 'hero-text' },
+        h('p', { class: 'eyebrow' }, 'Systems development lifecycle'),
+        h('h1', {}, ...biText({ en: 'Systems Documentation', ar: 'نظام توثيق الأنظمة' })),
+        h('p', {}, 'Fill in a form, save it, and download it as a Word (.docx) file. Documents are linked in order — each one references the previous document.'),
+        h('p', { class: 'ar', lang: 'ar', dir: 'rtl' }, 'املأ النموذج واحفظه ثم قم بتنزيله كملف Word. المستندات مترابطة بالتسلسل، وكل مستند يشير إلى المستند السابق.')),
+      h('dl', { class: 'stats' },
+        stat('Documents', 'المستندات', String(docs.length)),
+        stat('Systems', 'الأنظمة', String(systems.size)),
+        stat('Last saved', 'آخر حفظ', docs.length && docs[0].updatedAt ? new Date(docs[0].updatedAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—', 'small'))));
+
+    const cards = h('ol', { class: 'tpl-grid' }, ...UTAS.templates.map((t, i) => {
+      const n = docs.filter(d => d.templateId === t.id).length;
+      return h('li', {}, h('a', { class: 'tpl-card', href: '#/new/' + t.id, 'aria-label': 'New ' + t.title.en },
+        h('div', { class: 'tpl-top' },
+          h('span', { class: 'tpl-step' }, String(i + 1).padStart(2, '0')),
+          h('span', { class: 'badge' }, t.fileType)),
+        h('h3', { class: 'tpl-title' }, h('span', { class: 'en' }, t.title.en), h('span', { class: 'ar', lang: 'ar', dir: 'rtl' }, t.title.ar)),
+        h('p', { class: 'tpl-desc' }, t.description ? t.description.en : ''),
+        h('div', { class: 'tpl-foot' },
+          h('span', { class: 'tpl-count' + (n ? ' has' : '') }, n ? `${n} saved` : 'None yet'),
+          h('span', { class: 'tpl-new', 'aria-hidden': 'true' }, '+ New'))));
+    }));
 
     app.appendChild(h('section', { class: 'panel' },
-      h('h2', {}, ...biText({ en: 'Create a document', ar: 'إنشاء مستند' })), cards));
+      h('h2', {}, ...biText({ en: 'Create a document', ar: 'إنشاء مستند' })),
+      h('p', { class: 'panel-sub' }, 'Start with step 1 and follow the chain — each document links to the one before it.'),
+      cards));
 
     // Saved documents
     const search = h('input', { type: 'search', placeholder: 'Search by reference or system… / بحث', 'aria-label': 'Search documents', dir: 'auto' });
@@ -187,10 +209,10 @@
       for (const d of list) {
         const t = UTAS.getTemplate(d.templateId);
         tbody.appendChild(h('tr', {},
-          h('td', {}, h('a', { href: '#/doc/' + d.id, class: 'ref' }, d.ref)),
-          h('td', {}, h('span', { class: 'badge' }, t ? t.fileType : '?'), ' ', t ? t.title.en : d.templateId),
-          h('td', { dir: 'auto' }, d.values.system_name || ''),
-          h('td', {}, savedBy(d)),
+          h('td', { 'data-label': 'Reference No.' }, h('a', { href: '#/doc/' + d.id, class: 'ref' }, d.ref)),
+          h('td', { 'data-label': 'Document' }, h('span', { class: 'badge' }, t ? t.fileType : '?'), ' ', t ? t.title.en : d.templateId),
+          h('td', { 'data-label': 'System', dir: 'auto' }, d.values.system_name || '—'),
+          h('td', { 'data-label': 'Last saved', class: 'when' }, savedBy(d)),
           h('td', { class: 'actions' },
             h('a', { class: 'btn btn-small', href: '#/doc/' + d.id }, 'Open'),
             h('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: () => fullDoc(d).then(downloadDoc).catch(err => UTAS.toast('Export failed: ' + err.message, 'error')) }, 'Word ⬇'),
@@ -207,7 +229,7 @@
                 UTAS.toast('Duplicate failed: ' + err.message, 'error');
               }
             } }, 'Duplicate'),
-            isAdmin() ? h('button', { type: 'button', class: 'btn btn-small btn-danger', onclick: async () => {
+            isAdmin() ? h('button', { type: 'button', class: 'btn btn-small btn-ghost btn-danger', onclick: async () => {
               if (!confirm(`Delete ${d.ref}?\nهل تريد حذف المستند؟`)) return;
               try {
                 await UTAS.store.remove(d.id);
@@ -277,7 +299,7 @@
     app.innerHTML = '';
 
     const refOut = h('code', { class: 'ref-live' });
-    const status = h('span', { class: 'save-status', role: 'status' }, isNew ? 'Not saved yet' : 'Saved ' + savedBy(doc));
+    const status = h('span', { class: 'save-status' + (isNew ? '' : ' saved'), role: 'status' }, isNew ? 'Not saved yet' : 'Saved ' + savedBy(doc));
     const updateRef = () => { refOut.textContent = doc.id && !dirty ? doc.ref : L.computeRef(tpl, values); };
 
     const saveBtn = h('button', { type: 'button', class: 'btn' }, 'Save draft');
@@ -338,6 +360,19 @@
       }
       toc.appendChild(h('p', { class: 'toc-title' }, 'Sections'));
       toc.appendChild(ol);
+      scrollSpy();
+    };
+
+    scrollSpy = () => {
+      const links = [...toc.querySelectorAll('a')];
+      const visible = tpl.sections.filter(s => L.isVisible(s, values));
+      let current = 0;
+      visible.forEach((s, i) => {
+        const el = document.getElementById('sec_' + s.id);
+        if (el && el.getBoundingClientRect().top < window.innerHeight * 0.35) current = i;
+      });
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) current = visible.length - 1;
+      links.forEach((a, i) => { if (i === current) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
     };
 
     const form = new UTAS.Form(tpl, values, formRoot, {
@@ -345,6 +380,7 @@
       onChange: () => {
         dirty = true;
         status.textContent = 'Unsaved changes';
+        status.classList.remove('saved');
         status.classList.add('dirty');
         updateRef();
         drawToc();
@@ -368,6 +404,7 @@
         dirty = false;
         status.textContent = 'Saved ' + savedBy(doc);
         status.classList.remove('dirty');
+        status.classList.add('saved');
         if (historyBtn) historyBtn.disabled = false;
         if (!historyBox.hidden) showHistory();
         updateRef();
@@ -472,8 +509,9 @@
         r.details && r.details.email ? r.details.email : '')));
 
     app.appendChild(h('section', { class: 'hero' },
-      h('a', { href: '#/', class: 'back' }, '← All documents'),
-      h('h1', {}, ...biText({ en: 'Administration', ar: 'الإدارة' }))));
+      h('div', { class: 'hero-text' },
+        h('a', { href: '#/', class: 'back' }, '← All documents'),
+        h('h1', {}, ...biText({ en: 'Administration', ar: 'الإدارة' })))));
     app.appendChild(h('section', { class: 'panel' },
       h('h2', {}, ...biText({ en: 'Users', ar: 'المستخدمون' })),
       h('p', { class: 'muted' }, pendingCount
