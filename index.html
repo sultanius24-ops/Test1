@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UTAS Documentation System</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#app">Skip to content</a>
+  <header class="site-header">
+    <a href="#/" class="brand">
+      <span class="logo" aria-hidden="true">U</span>
+      <span class="brand-text">
+        <strong>UTAS Documentation System</strong>
+        <span class="ar" lang="ar" dir="rtl">نظام توثيق الأنظمة</span>
+      </span>
+    </a>
+  </header>
+
+  <main id="app" tabindex="-1"></main>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <!-- Word (.docx) generator: https://github.com/dolanmiu/docx (MIT) -->
+  <script src="vendor/docx.iife.js"></script>
+
+  <script src="js/config.js"></script>
+  <script src="js/registry.js"></script>
+
+  <!-- Document templates: add one <script> line per new template file -->
+  <script src="js/templates/01-system-request.js"></script>
+  <script src="js/templates/02-system-proposal.js"></script>
+  <script src="js/templates/03-project-plan.js"></script>
+  <script src="js/templates/04-srs.js"></script>
+  <script src="js/templates/05-digital-accessibility.js"></script>
+
+  <script src="js/storage.js"></script>
+  <script src="js/form.js"></script>
+  <script src="js/docx-export.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
